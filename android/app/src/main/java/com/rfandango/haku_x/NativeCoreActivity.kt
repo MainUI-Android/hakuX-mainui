@@ -337,15 +337,16 @@ class NativeCoreActivity : SDLActivity(), InputManager.InputDeviceListener {
 
   /**
    * The emulation stops while the activity is paused (the device suspends,
-   * another app in front) or the menu is open, and goes on where it stopped
-   * when neither is (nativeSetPaused).
+   * another app in front) or the menu is open (or MainUI's), and goes on where
+   * it stopped when neither is (nativeSetPaused).
    */
   private var activityPaused = false
   private var menuDialogs = 0
+  private var mainUiPaused = false
   private var nativePaused: Boolean? = null
 
   private fun syncPause() {
-    val want = activityPaused || menuDialogs > 0
+    val want = activityPaused || menuDialogs > 0 || mainUiPaused
     if (nativePaused != want) {
       nativePaused = want
       nativeSetPaused(want)
@@ -392,6 +393,13 @@ class NativeCoreActivity : SDLActivity(), InputManager.InputDeviceListener {
     override fun isReady() = isRunning() && nativePaused == false
 
     override fun slotCount() = SaveStateStore.SLOTS
+
+    override fun pause(): Boolean {
+      runOnUiThread { mainUiPaused = true; syncPause() }
+      return true
+    }
+
+    override fun resume() = runOnUiThread { mainUiPaused = false; syncPause() }
 
     override fun save(slot: Int): String {
       saveStates.saveQuietly(n(slot))?.let { throw IllegalStateException(it) }

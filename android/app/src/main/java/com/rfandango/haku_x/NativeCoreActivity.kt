@@ -1,6 +1,7 @@
 package com.rfandango.haku_x
 
 import android.app.AlertDialog
+import io.github.mainui.stateapi.MainUIStateApi
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -318,6 +319,7 @@ class NativeCoreActivity : SDLActivity(), InputManager.InputDeviceListener {
     }
     setupOnScreenController()
     setupFpsOverlay()
+    MainUIStateApi.attach(mainUiStates)
     setupShaderBuildLine()
     if (intent.getBooleanExtra(EXTRA_RELAUNCH, false) || intent.hasExtra(EXTRA_LOADSTATE)) {
       showHeldFrame(intent.getStringExtra(EXTRA_LOADSTATE))
@@ -374,6 +376,34 @@ class NativeCoreActivity : SDLActivity(), InputManager.InputDeviceListener {
       ::showMenuDialog,
       ::captureFrame,
     )
+  }
+
+  /**
+   * MainUI State API: MainUI (a frontend) saves and loads states directly. Its slots 0-9 are the
+   * menu's 1-10; its resume state is slot 99, which the menu doesn't list. A game runs in
+   * push-buffer mode (states work), not stopped by the menu or the screen in the background.
+   * Loading starts the core again into the state, as Load state does: the answer goes first.
+   */
+  private val mainUiStates = object : MainUIStateApi.Emulator {
+    private fun n(slot: Int) = if (slot == MainUIStateApi.RESUME_SLOT) 99 else slot + 1
+
+    override fun isRunning() = !dashboard && !relaunchStarted && nativeStatesAvailable()
+
+    override fun isReady() = isRunning() && nativePaused == false
+
+    override fun slotCount() = SaveStateStore.SLOTS
+
+    override fun save(slot: Int): String {
+      saveStates.saveQuietly(n(slot))?.let { throw IllegalStateException(it) }
+      return saveStates.state(n(slot)).absolutePath
+    }
+
+    override fun load(slot: Int) {
+      saveStates.loadCheck(n(slot))?.let { throw IllegalStateException(it) }
+      fpsHandler.postDelayed({ saveStates.loadChecked(n(slot)) }, 500)
+    }
+
+    override fun slotTime(slot: Int) = saveStates.state(n(slot)).takeIf { it.isFile }?.lastModified() ?: 0L
   }
 
   /** debug: debug.hakux.state=save:<slot> / load:<slot>, as the menu's (scripted runs). */
@@ -492,6 +522,7 @@ class NativeCoreActivity : SDLActivity(), InputManager.InputDeviceListener {
   }
 
   override fun onDestroy() {
+    MainUIStateApi.detach(mainUiStates)
     fpsHandler.removeCallbacks(fpsRunnable)
     fpsHandler.removeCallbacks(fatalRunnable)
     fpsHandler.removeCallbacks(rumbleRunnable)

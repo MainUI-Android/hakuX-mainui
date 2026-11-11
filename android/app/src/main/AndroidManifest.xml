@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
 
   <!-- The games' rumble, on the controllers (and a handheld's body). -->
   <uses-permission android:name="android.permission.VIBRATE" />
@@ -22,6 +23,17 @@
     android:appCategory="game"
     android:supportsRtl="true"
     android:theme="@style/Theme.HakuX">
+
+    <!-- MainUI State API: MainUI (a frontend) saves and loads states with broadcasts. -->
+    <meta-data android:name="io.github.mainui.STATE_API" android:value="1" />
+    <receiver
+      android:name="io.github.mainui.stateapi.MainUIStateApi$Receiver"
+      android:exported="true"
+      tools:ignore="ExportedReceiver">
+      <intent-filter>
+        <action android:name="io.github.mainui.stateapi.COMMAND" />
+      </intent-filter>
+    </receiver>
 
     <!-- The app's screens (Compose) and the entry for frontends' launches.
          singleTop: a frontend's launch while the library is open comes to

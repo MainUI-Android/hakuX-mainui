@@ -42,7 +42,8 @@ class SaveStateStore(context: Context, gameKey: String, discUri: String? = null)
   fun delete(slot: Int) {
     state(slot).delete()
     thumb(slot).delete()
-    if (saved().isEmpty()) File(dir, "blobs").deleteRecursively()
+    /* (not while a state outside the ten is kept: MainUI's resume state, slot 99) */
+    if (dir.listFiles { f -> f.name.endsWith(".hxs") }.isNullOrEmpty()) File(dir, "blobs").deleteRecursively()
   }
 
   /** States kept by the disc URI's hash: their slots move here (newer wins). */

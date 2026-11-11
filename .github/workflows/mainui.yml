@@ -1,0 +1,124 @@
+# MainUI-Android: builds hakuX with the MainUI State API and publishes it for MainUI.
+# Nightly at 00:00 PST: merges upstream, builds "nightly" (prerelease); when upstream has a new
+# release, also builds it with the patch on top as a stable release, which MainUI installs.
+# Signing: organization secrets MAINUI_KEYSTORE (base64), MAINUI_KEYSTORE_PASSWORD,
+# MAINUI_KEY_ALIAS, MAINUI_KEY_PASSWORD. Helpers: .github/mainui/ci.sh.
+name: MainUI
+
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md']
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: mainui
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: rfandango/hakuX
+  UPSTREAM_BRANCH: master
+  STABLE_TAG_REGEX: '^v[0-9]+(\.[0-9]+)+$'
+  GH_TOKEN: ${{ github.token }}
+  APK_NAME: hakux-mainui
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      channels: ${{ steps.plan.outputs.channels }}
+      tag: ${{ steps.stable.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Upstream's workflows off
+        run: bash .github/mainui/ci.sh quiet-upstream-ci
+      - name: Merge upstream
+        if: github.event_name == 'schedule'
+        run: bash .github/mainui/ci.sh sync
+      - name: Upstream release to build
+        id: stable
+        if: github.event_name != 'push'
+        run: bash .github/mainui/ci.sh stable-tag
+      - name: Plan
+        id: plan
+        run: |
+          if [ -n "${{ steps.stable.outputs.tag }}" ]; then echo 'channels=["nightly","stable"]' >> "$GITHUB_OUTPUT"
+          else echo 'channels=["nightly"]' >> "$GITHUB_OUTPUT"; fi
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: ${{ fromJSON(needs.plan.outputs.channels) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+      - name: Stable source (upstream release + patch)
+        if: matrix.channel == 'stable'
+        run: bash .github/mainui/ci.sh prepare-stable "${{ needs.plan.outputs.tag }}"
+      # (As android/README.md: FEX with the submodules it builds with.)
+      - name: Submodules
+        run: |
+          git submodule update --init external/fex
+          git -C external/fex submodule update --init External/fmt External/range-v3 \
+            External/rpmalloc External/unordered_dense External/xxhash Source/Common/cpp-optparse
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: NDK, Ninja, native deps
+        run: |
+          yes | sdkmanager "ndk;29.0.14206865" >/dev/null || true
+          sudo apt-get install -y -qq ninja-build >/dev/null
+          bash .github/mainui/native-deps.sh "$RUNNER_TEMP/native-deps"
+      - name: Native core
+        run: |
+          ndk="$ANDROID_HOME/ndk/29.0.14206865"
+          cmake -S native -B build/native/core -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DCMAKE_BUILD_TYPE=Release \
+            -DNC_DEPS="$RUNNER_TEMP/native-deps"
+          ninja -C build/native/core hakuxcore
+          ANDROID_NDK="$ndk" bash tools/native/app-libs.sh
+      - name: Version
+        run: bash .github/mainui/ci.sh version "${{ matrix.channel }}" "${{ needs.plan.outputs.tag }}"
+      - name: Build
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew --no-daemon --stacktrace assembleRelease
+      - name: Sign
+        id: sign
+        env:
+          MAINUI_KEYSTORE: ${{ secrets.MAINUI_KEYSTORE }}
+          MAINUI_KEYSTORE_PASSWORD: ${{ secrets.MAINUI_KEYSTORE_PASSWORD }}
+          MAINUI_KEY_ALIAS: ${{ secrets.MAINUI_KEY_ALIAS }}
+          MAINUI_KEY_PASSWORD: ${{ secrets.MAINUI_KEY_PASSWORD }}
+        run: |
+          apk=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          cp "$apk" "$APK_NAME-unsigned.apk"
+          set +e; bash .github/mainui/ci.sh sign "$apk" "$APK_NAME.apk"; rc=$?; set -e
+          if [ $rc = 0 ]; then echo "signed=true" >> "$GITHUB_OUTPUT"; elif [ $rc != 2 ]; then exit $rc; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_NAME }}-${{ matrix.channel }}
+          path: ${{ env.APK_NAME }}*.apk
+          retention-days: 14
+      - name: Release
+        if: steps.sign.outputs.signed == 'true'
+        run: bash .github/mainui/ci.sh release "${{ matrix.channel }}" "${{ needs.plan.outputs.tag }}" "$APK_NAME.apk"

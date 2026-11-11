@@ -28,11 +28,13 @@ android {
 
   defaultConfig {
     applicationId = "com.rfandango.haku_x"
+    // MainUI-Android build: installs beside the official app (CI sets the version).
+    applicationIdSuffix = ".mainui"
     minSdk = 28
     targetSdk = 36
 
-    versionCode = 9
-    versionName = "1.3.0"
+    versionCode = System.getenv("MAINUI_VERSION_CODE")?.toIntOrNull() ?: 9
+    versionName = System.getenv("MAINUI_VERSION_NAME") ?: "1.3.0"
 
     ndk {
       abiFilters += listOf("arm64-v8a")
@@ -74,7 +76,7 @@ android {
       )
     }
     release {
-      resValue("string", "app_name", "hakuX")
+      resValue("string", "app_name", "hakuX (MainUI)")
       isMinifyEnabled = true
       proguardFiles(
         getDefaultProguardFile("proguard-android-optimize.txt"),

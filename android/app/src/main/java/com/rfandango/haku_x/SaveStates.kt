@@ -197,6 +197,36 @@ class SaveStates(
     }
   }
 
+  /**
+   * MainUI State API: saves [slot] now, without the menu's dialogs (not on the UI thread): null,
+   * or why it couldn't. Its frame is kept after, as the menu's save does.
+   */
+  fun saveQuietly(slot: Int): String? {
+    store.prepare()
+    val err = NativeCoreActivity.nativeSaveState(store.state(slot).absolutePath)
+    if (err == null) {
+      activity.runOnUiThread {
+        captureFrame { frame ->
+          if (frame != null) Thread {
+            runCatching { store.thumb(slot).outputStream().use { frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
+          }.start()
+        }
+      }
+    }
+    return err
+  }
+
+  /** MainUI State API: whether [slot] can load into this game (not on the UI thread): null, or why not. */
+  fun loadCheck(slot: Int): String? =
+    if (!store.state(slot).isFile) "the slot is empty" else NativeCoreActivity.nativeStateCheck(store.state(slot).absolutePath)
+
+  /** MainUI State API: starts the core again into [slot] (checked with loadCheck; on the UI thread), as Load state does. */
+  fun loadChecked(slot: Int) {
+    val held = RelaunchActivity.heldFrame(activity)
+    runCatching { store.thumb(slot).copyTo(held, overwrite = true) }.onFailure { held.delete() }
+    activity.restartInto(store.state(slot).absolutePath)
+  }
+
   private companion object {
     val DELETE_KEYS = setOf(KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_FORWARD_DEL)
   }

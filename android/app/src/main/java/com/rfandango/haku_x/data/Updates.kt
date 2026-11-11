@@ -72,6 +72,8 @@ object Updates {
    * Network and format failures throw.
    */
   suspend fun check(context: Context): Release? = withContext(Dispatchers.IO) {
+    /* MainUI-Android build: MainUI updates it from MainUI-Android's releases, not this */
+    if (context.packageName.endsWith(".mainui")) return@withContext null
     val conn = open("https://api.github.com/repos/$REPO/releases/latest")
     conn.setRequestProperty("Accept", "application/vnd.github+json")
     try {

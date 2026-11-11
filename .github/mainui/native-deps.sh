@@ -35,10 +35,13 @@ if [ ! -d "$deps/adrenotools/.git" ]; then
   git -C "$deps/adrenotools" apply "$(pwd)/tools/native/adrenotools-kgsl-context-priority.patch"
 fi
 
-# nv2a_vsh_cpu 561fe80 (a short sha: a full clone, it is small).
+# nv2a_vsh_cpu: README's 561fe80 is from the author's local tree (not in any public repository);
+# else the revision xemu's own wrap pins (subprojects/nv2a_vsh_cpu.wrap). A full clone: it is small.
 if [ ! -d "$deps/root/subprojects/nv2a_vsh_cpu/.git" ]; then
   mkdir -p "$deps/root/subprojects"
-  git clone -q https://github.com/abaire/nv2a_vsh_cpu.git "$deps/root/subprojects/nv2a_vsh_cpu"
-  git -C "$deps/root/subprojects/nv2a_vsh_cpu" checkout -q 561fe80
-  echo "nv2a_vsh_cpu: 561fe80"
+  vsh="$deps/root/subprojects/nv2a_vsh_cpu"
+  git clone -q https://github.com/xemu-project/nv2a_vsh_cpu.git "$vsh"
+  for rev in 561fe80 89315e8eff62605d2a96fe14429ebeac1dacaa8c; do
+    if git -C "$vsh" checkout -q "$rev" 2>/dev/null; then echo "nv2a_vsh_cpu: $rev"; break; fi
+  done
 fi

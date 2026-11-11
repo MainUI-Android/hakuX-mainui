@@ -100,7 +100,8 @@ jobs:
           cmake -S native -B build/native/core -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DCMAKE_BUILD_TYPE=Release \
-            -DNC_DEPS="$RUNNER_TEMP/native-deps"
+            -DNC_DEPS="$RUNNER_TEMP/native-deps" \
+            -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
           ninja -C build/native/core hakuxcore
           ANDROID_NDK="$ndk" bash tools/native/app-libs.sh
       - name: Version

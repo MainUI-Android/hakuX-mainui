@@ -108,7 +108,8 @@ jobs:
         run: bash .github/mainui/ci.sh version "${{ matrix.channel }}" "${{ needs.plan.outputs.tag }}"
       - name: Build
         working-directory: android
-        run: chmod +x gradlew && ./gradlew --no-daemon --stacktrace assembleRelease
+        # (upstream's gradle.properties names a JDK path of its own machine)
+        run: chmod +x gradlew && ./gradlew --no-daemon --stacktrace "-Dorg.gradle.java.home=$JAVA_HOME" assembleRelease
       - name: Sign
         id: sign
         env:

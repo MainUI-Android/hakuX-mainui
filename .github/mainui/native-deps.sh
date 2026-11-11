@@ -26,7 +26,15 @@ at glslang https://github.com/KhronosGroup/glslang.git 16.1.0
 at spirv_reflect https://github.com/KhronosGroup/SPIRV-Reflect.git vulkan-sdk-1.4.328.0
 at vma https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git v3.3.0
 at SDL3 https://github.com/libsdl-org/SDL.git release-3.4.18
-at libslirp https://gitlab.freedesktop.org/slirp/libslirp.git v4.7.0
+
+# libslirp 26be815b: after the v4.7.0 tag (it has slirp_ssize_t, which native/net/nat.c uses).
+# A short sha: a full clone, it is small. v4.8.0 if that commit is gone.
+if [ ! -d "$deps/libslirp/.git" ]; then
+  git clone -q https://gitlab.freedesktop.org/slirp/libslirp.git "$deps/libslirp"
+  for rev in 26be815b v4.8.0; do
+    if git -C "$deps/libslirp" checkout -q "$rev" 2>/dev/null; then echo "libslirp: $rev"; break; fi
+  done
+fi
 
 # adrenotools 8fae8ce, with the KGSL context priority hook patch.
 if [ ! -d "$deps/adrenotools/.git" ]; then

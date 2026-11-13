@@ -103,6 +103,9 @@ jobs:
             -DNC_DEPS="$RUNNER_TEMP/native-deps" \
             -DCMAKE_CXX_SCAN_FOR_MODULES=OFF
           ninja -C build/native/core hakuxcore
+          # (a release's app-libs.sh may name only the Windows NDK's strip)
+          w="$ndk/toolchains/llvm/prebuilt/windows-x86_64/bin"
+          [ -e "$w/llvm-strip.exe" ] || { mkdir -p "$w" && ln -s "$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" "$w/llvm-strip.exe"; }
           ANDROID_NDK="$ndk" bash tools/native/app-libs.sh
       - name: Version
         run: bash .github/mainui/ci.sh version "${{ matrix.channel }}" "${{ needs.plan.outputs.tag }}"
